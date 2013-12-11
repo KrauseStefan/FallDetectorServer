@@ -25,7 +25,8 @@
             
             $scope.options = {
                 threshold : 25,
-                
+                pause: false,
+                pausing : false,
                 yaxis: {
                     show: true,
                 
@@ -57,16 +58,14 @@
 
             });
             
-            function sendData(dataObj){
-                var params = {method: 'POST', url: '/data', data: dataObj}
-                $http(params).
-                    success(function(data, status, headers, config) {
-                        $scope.test = data;
-                        getAccel();
-                    }).
-                    error(function(data, status, headers, config) {
-                        $scope.test = "Error sending data from server.";
-                    });
+            $scope.saveData = function (){
+                var params = {method: 'POST', url: '/accel/save', data: $scope.data}
+                $http(params).then(
+                function(data){
+
+                }, function(data){                    
+                    $scope.test = "Error sending data to server.";
+                });
             }
             
             function parseData(data1, data2){
@@ -81,9 +80,10 @@
                     return series                    
                 }
                 
-                var line = {label: "Threshold", data : [[0, $scope.options.threshold], [200, $scope.options.threshold]]}
+                var lineBelow = {label: "Threshold", color: 'black', data : [[0, -$scope.options.threshold], [200, -$scope.options.threshold]]}
+                var lineTop = {color: 'black', data : [[0, $scope.options.threshold], [200, $scope.options.threshold]]}
                 
-                return [ line,
+                return [ lineBelow, lineTop,
                     {label: "Acceleraometer: X", data: parseSingleAxis( data1.X)}, 
                     {label: "Acceleraometer: Y", data: parseSingleAxis( data1.Y)},
                     {label: "Acceleraometer: Z", data: parseSingleAxis( data1.Z)}//,
@@ -94,20 +94,50 @@
                     ];
             }
             
+            
+            
+            function verifyThresshold(){
+                var d = $scope.data;
+                for(var j = 2; j < d.length; j++){
+                    for(var i = 0; i < d[j].data.length; i++){
+                        if(d[j].data[i][1] > $scope.options.threshold || d[j].data[i][1] < -$scope.options.threshold)
+                            $scope.options.pausing = true;
+                    }
+                }
+            }
+            
             function getAccel(){
-                 $q.all([$http({method: 'GET', url: '/gyro', data: $scope.data}),
-                $http({method: 'GET', url: '/accel', data: $scope.data})]).
-                    then(function(data) {
-                        $scope.data = parseData(data[0].data, data[1].data);
+//                $q.all([$http({method: 'GET', url: '/gyro', data: $scope.data}),
+//                $http({method: 'GET', url: '/accel', data: $scope.data})]).
+                $http({method: 'GET', url: '/accel', data: $scope.data}).
+                then(function(data) {
+                        $scope.data = parseData(data.data)//, data[1].data);
+                        verifyThresshold();
                     },function(data, status, headers, config) {
                         $scope.test = "Error loading data from server.";
                     });
             };
             
+            var intervalPromise;
+            $scope.$watch('options.pause', function(value){
 
+                if(value)
+                  $interval.cancel(intervalPromise);                    
+                else
+                  intervalPromise = $interval(getAccel, 200);
+
+            });
+            
+            $scope.$watch('options.pausing', function(value){
+               if(value) 
+                    $interval(function(){
+                        $scope.options.pause = true;
+                        $scope.options.pausing = false;
+                    }, 5000, 1);
+                
+            });
 
             
-            $interval(getAccel, 200);
             
     });
 	</script>
@@ -119,6 +149,17 @@
 	<script src="./js/flot/jquery.js"></script>
 	<script src="./js/flot/jquery.flot.js"></script>
     
+    <style>
+        button {
+            margin: 0;
+        }
+        input {
+            min-width: 100px;
+        }
+        select {
+            min-width: 100px;
+        }
+    </style>
 </head>
 <body ng-controller="controller">
     <div style="float: left;">
@@ -126,15 +167,16 @@
         </div>
         <div style="float: left;">
             <p>Threshold</p>
-            <input ng-model="options.threshold" style="width: 80px;"/>
+            <input ng-model="options.threshold" style="width: 80px;"/><br>
+            <button ng-show="options.pause == false" ng-click="options.pause = true" style="width: 60px;">Pause</button>
+            <button ng-show="options.pause == true" ng-click="options.pause = false" style="width: 60px;">Start</button>
+            <button ng-click="saveData()">Save</button>
+            <p>SavedData</p>
+            <select>
+                <option>None<option>
+            </select><br>
         </div>
     </div>
-    <br>
-	
-	<!--{{test}}<br>
-	
-	<textarea ng-model="dataStr" style="min-width: 500px; min-height: 300px"></textarea>
-	-->
-	
+		
 </body>
 </html>

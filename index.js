@@ -1,4 +1,6 @@
+
 var restify = require('restify');
+var fs = require('fs');
 
 var dataAccel = {
     "X":[],
@@ -13,13 +15,6 @@ var dataAccel = {
     "Z":[]
   };
 var i = 0;
-
-function storeData(data, req, res, next) {
-  dataAccel = req.body;
-  res.send('ok');
-//  console.log('Data recived: ' + JSON.stringify(dataAccel));
-  return next();
-};
 
 var slice = Array.prototype.slice;
 
@@ -42,6 +37,39 @@ Function.prototype.curry =  function() {
       return __method.apply(this, a);
     }
   }
+
+function saveData(path, req, res, next){
+  var path = './accel';
+  
+  function saveFile(){
+	  var time = Date.now()
+	  
+	  fs.open(path + "/" + time + ".js", 'wx', function(err, fd){
+
+		if(err != null)
+		  return;
+		
+		var dataStr = JSON.stringify(req.body);
+		var buffer = new Buffer(dataStr);
+			
+		fs.write(fd, buffer, 0, dataStr.length, 0, function(err, written, buffer){
+		  console.log(written + " bytes of data written.");
+		  fs.close(fd);			
+		})
+
+	  });
+  }
+  
+  console.log('Saveing data: ' + path);
+  fs.exists(path, function(exists){
+		if(!exists)
+			fs.mkdir(path, saveFile)  ;
+		else
+			saveFile();
+	});
+
+  return next();
+}
 
 function appendData(data, req, res, next) {
   data.X = data.X.concat(req.body.X);
@@ -77,16 +105,14 @@ server.use(restify.bodyParser());
 
 server.get('/accel', getData.curry(dataAccel));
 server.head('/accel', getData.curry(dataAccel));
-
 server.post('/accel', appendData.curry(dataAccel));
-server.put('/accel', storeData.curry(dataAccel));
 
 server.get('/gyro', getData.curry(dataGyro));
 server.head('/gyro', getData.curry(dataGyro));
-
 server.post('/gyro', appendData.curry(dataGyro));
-server.put('/gyro', storeData.curry(dataGyro));
 
+
+server.post('/accel/save', saveData.curry('accel/'));
 
 // server.del('hello/:name', function rm(req, res, next) {});
 
