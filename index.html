@@ -59,14 +59,31 @@
             });
             
             $scope.saveData = function (){
-                var params = {method: 'POST', url: '/accel/save', data: $scope.data}
+                var params = {method: 'POST', url: '/accel/saved', data: $scope.data}
                 $http(params).then(
                 function(data){
 
                 }, function(data){                    
-                    $scope.test = "Error sending data to server.";
+
                 });
             }
+            
+            function getSavedData(){
+                var params = {method: 'GET', url: '/accel/saved'}
+                $http(params).then(
+                    function(response){
+                        var d = response.data;
+                        for(var i in d){
+                            d[i] = JSON.parse(d[i]);
+                        }
+                        $scope.savedData = d;
+                    }, function(data){               
+                    
+                    });
+                
+            }
+            getSavedData();
+            
             
             function parseData(data1, data2){
                 
@@ -114,7 +131,7 @@
                         $scope.data = parseData(data.data)//, data[1].data);
                         verifyThresshold();
                     },function(data, status, headers, config) {
-                        $scope.test = "Error loading data from server.";
+
                     });
             };
             
@@ -137,6 +154,13 @@
                 
             });
 
+            $scope.$watch('selectedData', function(data){
+                if(data && data.length > 0){
+                   $scope.options.pause = true;
+                   $scope.data = data;                    
+                }
+            })
+            
             
             
     });
@@ -163,7 +187,7 @@
 </head>
 <body ng-controller="controller">
     <div style="float: left;">
-    	<div flot-graf data="data" options="options" style="height: 900px; width: 800px; float: left;"" > 
+    	<div flot-graf data="data" options="options" style="height: 900px; width: 750px; float: left;"" > 
         </div>
         <div style="float: left;">
             <p>Threshold</p>
@@ -172,8 +196,8 @@
             <button ng-show="options.pause == true" ng-click="options.pause = false" style="width: 60px;">Start</button>
             <button ng-click="saveData()">Save</button>
             <p>SavedData</p>
-            <select>
-                <option>None<option>
+            <select ng-options="key for (key , value) in savedData" ng-model="selectedData">
+
             </select><br>
         </div>
     </div>

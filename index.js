@@ -39,7 +39,6 @@ Function.prototype.curry =  function() {
   }
 
 function saveData(path, req, res, next){
-  var path = './accel';
   
   function saveFile(){
 	  var time = Date.now()
@@ -50,9 +49,8 @@ function saveData(path, req, res, next){
 		  return;
 		
 		var dataStr = JSON.stringify(req.body);
-		var buffer = new Buffer(dataStr);
 			
-		fs.write(fd, buffer, 0, dataStr.length, 0, function(err, written, buffer){
+		fs.writeFile(fd, dataStr, function(err){
 		  console.log(written + " bytes of data written.");
 		  fs.close(fd);			
 		})
@@ -70,6 +68,19 @@ function saveData(path, req, res, next){
 
   return next();
 }
+
+function getSavedData(path, req, res, next){
+ var files = fs.readdirSync(path);
+ 
+ var dataObj = {};
+ for(var i = 0; i < files.length; i++){
+	 dataObj[files[i]] = fs.readFileSync(path + "/" + files[i], 'utf8');	 
+ }
+ 
+ 
+ res.send(dataObj);
+}
+
 
 function appendData(data, req, res, next) {
   data.X = data.X.concat(req.body.X);
@@ -92,7 +103,6 @@ function appendData(data, req, res, next) {
 
 function getData(data, req, res, next) {
   res.send(data);  
-//  console.log('Data sent: ' + JSON.stringify(data));
 	if(i == -1)
 		appendData();
   return next();
@@ -112,9 +122,8 @@ server.head('/gyro', getData.curry(dataGyro));
 server.post('/gyro', appendData.curry(dataGyro));
 
 
-server.post('/accel/save', saveData.curry('accel/'));
-
-// server.del('hello/:name', function rm(req, res, next) {});
+server.post('/accel/saved', saveData.curry('./accel'));
+server.get('/accel/saved', getSavedData.curry('./accel'));
 
 
 server.listen(8081, function() {
