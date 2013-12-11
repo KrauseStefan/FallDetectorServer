@@ -1,0 +1,140 @@
+<! DOCTYPE html >
+<html ng-app="FallDetector">
+<head>
+	<title>Fall Detector data</title>
+	
+	<script src="./js/angular_1.2.3.js"></script>
+    <script src="./js/angular-resource.js"></script>
+	<script>
+        "use strict";
+        angular.module('FallDetector', [ 'angular-websocket', 'ngResource'], function(){
+    
+        }).controller('controller', function ($q, $scope, $http, $resource, WebSocket, $interval) {
+            
+            var testData = {
+                x: [1, 3, 3, 2, 3 ],
+                y: [],
+                z: []
+                };
+                
+            $scope.data = {
+                x: [],
+                y: [],
+                z: []
+            };
+            
+            $scope.options = {
+                threshold : 25,
+                
+                yaxis: {
+                    show: true,
+                
+//                    color: null or color spec
+//                    tickColor: null or color spec
+                
+                    min: -90,
+                    max: 90
+                
+                
+//                    ticks: null or number or ticks array or (fn: axis -> ticks array)
+//                    tickSize: number or array
+//                    minTickSize: number or array
+//                
+//                    alignTicksWithAxis: null or number
+                } 
+             };
+            
+            $scope.dataStr = JSON.stringify(testData);
+            
+            $scope.$watch('dataStr', function(newData, oldData){
+                try{
+                    var data = JSON.parse(newData);
+                }catch(e){
+                    //parse errors are ignored.
+                    return;
+                }
+                //sendData(newData);
+
+            });
+            
+            function sendData(dataObj){
+                var params = {method: 'POST', url: '/data', data: dataObj}
+                $http(params).
+                    success(function(data, status, headers, config) {
+                        $scope.test = data;
+                        getAccel();
+                    }).
+                    error(function(data, status, headers, config) {
+                        $scope.test = "Error sending data from server.";
+                    });
+            }
+            
+            function parseData(data1, data2){
+                
+                function parseSingleAxis(axis){
+                    var series = [];
+                    if(axis == undefined)
+                        return series;
+                    for(var i = 0; i < axis.length; i++){
+                        series.push([i, axis[i] * 5]);                    
+                    }                    
+                    return series                    
+                }
+                
+                var line = {label: "Threshold", data : [[0, $scope.options.threshold], [200, $scope.options.threshold]]}
+                
+                return [ line,
+                    {label: "Acceleraometer: X", data: parseSingleAxis( data1.X)}, 
+                    {label: "Acceleraometer: Y", data: parseSingleAxis( data1.Y)},
+                    {label: "Acceleraometer: Z", data: parseSingleAxis( data1.Z)}//,
+//                    {label: "Gyro: X", data: parseSingleAxis( data2.X)}, 
+//                    {label: "Gyro: Y", data: parseSingleAxis( data2.Y)},
+//                    {label: "Gyro: Z", data: parseSingleAxis( data2.Z)} 
+                    
+                    ];
+            }
+            
+            function getAccel(){
+                 $q.all([$http({method: 'GET', url: '/gyro', data: $scope.data}),
+                $http({method: 'GET', url: '/accel', data: $scope.data})]).
+                    then(function(data) {
+                        $scope.data = parseData(data[0].data, data[1].data);
+                    },function(data, status, headers, config) {
+                        $scope.test = "Error loading data from server.";
+                    });
+            };
+            
+
+
+            
+            $interval(getAccel, 200);
+            
+    });
+	</script>
+	
+	<script src="./js/FallDetector-Module.js"></script>
+	<script src="./js/flot_graf_directive.js"></script>
+	<script src="./js/angular-websocket.js"></script>
+	
+	<script src="./js/flot/jquery.js"></script>
+	<script src="./js/flot/jquery.flot.js"></script>
+    
+</head>
+<body ng-controller="controller">
+    <div style="float: left;">
+    	<div flot-graf data="data" options="options" style="height: 900px; width: 800px; float: left;"" > 
+        </div>
+        <div style="float: left;">
+            <p>Threshold</p>
+            <input ng-model="options.threshold" style="width: 80px;"/>
+        </div>
+    </div>
+    <br>
+	
+	<!--{{test}}<br>
+	
+	<textarea ng-model="dataStr" style="min-width: 500px; min-height: 300px"></textarea>
+	-->
+	
+</body>
+</html>
