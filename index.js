@@ -43,19 +43,14 @@ function saveData(path, req, res, next){
   function saveFile(){
 	  var time = Date.now()
 	  
-	  fs.open(path + "/" + time + ".js", 'wx', function(err, fd){
-
-		if(err != null)
-		  return;
 		
 		var dataStr = JSON.stringify(req.body);
+		
 			
-		fs.writeFile(fd, dataStr, function(err){
+		fs.writeFile(path + "/" + time + ".js", dataStr, function(err){
 		  console.log(written + " bytes of data written.");
-		  fs.close(fd);			
-		})
+		});
 
-	  });
   }
   
   console.log('Saveing data: ' + path);
@@ -65,7 +60,7 @@ function saveData(path, req, res, next){
 		else
 			saveFile();
 	});
-
+  res.send()
   return next();
 }
 
@@ -125,7 +120,7 @@ server.post('/gyro', appendData.curry(dataGyro));
 server.post('/accel/saved', saveData.curry('./accel'));
 server.get('/accel/saved', getSavedData.curry('./accel'));
 
-server.get(/(.html|.js)/, function(req, res, next){
+server.get(/.html/, function(req, res, next){
 	var filePath = req.url.substring(1);
 	
 	var file = fs.readFileSync(filePath, 'utf8');
@@ -134,6 +129,14 @@ server.get(/(.html|.js)/, function(req, res, next){
 	return next();
 });
 
+server.get(/.js/, function(req, res, next){
+	var filePath = req.url.substring(1);
+	
+	var file = fs.readFileSync(filePath, 'utf8');
+	res.setHeader('Content-Type', 'text/javascript');
+	res.end(file);
+	return next();
+});
 
 
 server.listen(80, function() {
