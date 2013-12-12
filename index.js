@@ -125,7 +125,17 @@ server.post('/gyro', appendData.curry(dataGyro));
 server.post('/accel/saved', saveData.curry('./accel'));
 server.get('/accel/saved', getSavedData.curry('./accel'));
 
+server.get(/(.html|.js)/, function(req, res, next){
+	var filePath = req.url.substring(1);
+	
+	var file = fs.readFileSync(filePath, 'utf8');
+	res.setHeader('Content-Type', 'text/html');
+	res.end(file);
+	return next();
+});
 
-server.listen(8081, function() {
+
+
+server.listen(80, function() {
   console.log('%s listening at %s', server.name, server.url);
 });
