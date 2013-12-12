@@ -62,7 +62,7 @@
                 var params = {method: 'POST', url: '/accel/saved', data: $scope.data}
                 $http(params).then(
                 function(data){
-
+                    getSavedData();
                 }, function(data){                    
 
                 });
