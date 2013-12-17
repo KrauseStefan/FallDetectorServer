@@ -17,7 +17,13 @@
                 z: []
                 };
                 
-            $scope.data = {
+            $scope.data1 = {
+                x: [],
+                y: [],
+                z: []
+            };
+                        
+            $scope.data2 = {
                 x: [],
                 y: [],
                 z: []
@@ -33,8 +39,8 @@
 //                    color: null or color spec
 //                    tickColor: null or color spec
                 
-                    min: -90,
-                    max: 90
+                    min: -40,
+                    max: 40
                 
                 
 //                    ticks: null or number or ticks array or (fn: axis -> ticks array)
@@ -75,6 +81,7 @@
                         var d = response.data;
                         for(var i in d){
                             d[i] = JSON.parse(d[i]);
+                            d[i].name = i;
                         }
                         $scope.savedData = d;
                     }, function(data){               
@@ -103,18 +110,17 @@
                 return [ lineBelow, lineTop,
                     {label: "Acceleraometer: X", data: parseSingleAxis( data1.X)}, 
                     {label: "Acceleraometer: Y", data: parseSingleAxis( data1.Y)},
-                    {label: "Acceleraometer: Z", data: parseSingleAxis( data1.Z)}//,
-//                    {label: "Gyro: X", data: parseSingleAxis( data2.X)}, 
-//                    {label: "Gyro: Y", data: parseSingleAxis( data2.Y)},
-//                    {label: "Gyro: Z", data: parseSingleAxis( data2.Z)} 
+                    {label: "Acceleraometer: Z", data: parseSingleAxis( data1.Z)},
+                    {label: "Gyro: X", data: parseSingleAxis( data2.X)}, 
+                    {label: "Gyro: Y", data: parseSingleAxis( data2.Y)},
+                    {label: "Gyro: Z", data: parseSingleAxis( data2.Z)} 
                     
                     ];
             }
             
             
             
-            function verifyThresshold(){
-                var d = $scope.data;
+            function verifyThresshold(d){
                 for(var j = 2; j < d.length; j++){
                     for(var i = 0; i < d[j].data.length; i++){
                         if(d[j].data[i][1] > $scope.options.threshold || d[j].data[i][1] < -$scope.options.threshold)
@@ -124,12 +130,14 @@
             }
             
             function getAccel(){
-//                $q.all([$http({method: 'GET', url: '/gyro', data: $scope.data}),
-//                $http({method: 'GET', url: '/accel', data: $scope.data})]).
-                $http({method: 'GET', url: '/accel', data: $scope.data}).
+                $q.all([$http({method: 'GET', url: '/accel', data: $scope.data}),
+                $http({method: 'GET', url: '/gyro', data: $scope.data})]).
+//                $http({method: 'GET', url: '/gyro', data: $scope.data}).
                 then(function(data) {
-                        $scope.data = parseData(data.data)//, data[1].data);
-                        verifyThresshold();
+                    var dataParsed = parseData(data[0].data, data[1].data);
+                        $scope.data1 = dataParsed.slice(0,5);
+                        $scope.data2 = dataParsed.slice(5,9);                        
+                        verifyThresshold($scope.data1);
                     },function(data, status, headers, config) {
 
                     });
@@ -161,7 +169,39 @@
                 }
             })
             
-            
+            var lastX = NaN;
+            var lastY = NaN;
+            var lastZ = NaN;
+            $scope.maxDifference = 4;
+
+            $interval(function(){
+                function getLastVal(data){
+                    var index = data.data.length;
+                    return data.data[index -1][1];
+                }
+                
+                function getDifference(valA, valB){
+                    return Math.abs(valA - valB);
+                }
+                
+                var X = getLastVal($scope.data1[2]);
+                var Y = getLastVal($scope.data1[3]);
+                var Z = getLastVal($scope.data1[4]);
+                
+                
+                if(!Number.isNaN(lastX)){
+                    var xDiff = getDifference(X, lastX);
+                    var yDiff = getDifference(Y, lastY);
+                    var zDiff = getDifference(Z, lastZ);
+                    if(xDiff > $scope.maxDifference || yDiff > $scope.maxDifference || zDiff > $scope.maxDifference)
+                        $scope.orientationHasChanged = true;
+                }
+
+                lastX = X;
+                lastY = Y;
+                lastZ = Z;
+                
+            }, 5000);
             
     });
 	</script>
@@ -186,10 +226,14 @@
     </style>
 </head>
 <body ng-controller="controller">
-    <div style="float: left;">
-    	<div flot-graf data="data" options="options" style="height: 900px; width: 750px; float: left;"" > 
+    <div>
+        <div style="height: 950px; width=460px;"> 
+            <div flot-graf data="data1" options="options" style="height: 450px; width: 750px; float: left;">
+            </div> 
+    	    <div flot-graf data="data2" options="options" style="height: 450px; width: 750px; float: left;">
+            </div>
         </div>
-        <div style="float: left;">
+        <div style="position: fixed; top: 5px; right: 5px;">
             <p>Threshold</p>
             <input ng-model="options.threshold" style="width: 80px;"/><br>
             <button ng-show="options.pause == false" ng-click="options.pause = true" style="width: 60px;">Pause</button>
@@ -197,9 +241,19 @@
             <button ng-click="saveData()">Save</button>
             <p>SavedData</p>
             <select ng-options="key for (key , value) in savedData" ng-model="selectedData">
-
-            </select><br>
+            </select>
+            <p>Rename to</p>
+            <input ng-model="selectedData.name">
+        <div>
+            <p>Orientation:</p>
+            {{orientationHasChanged ? 'Orientation Changed' : 'Stabile'}}<br>
+            <button ng-click="orientationHasChanged = false" ng-show="orientationHasChanged">Accept</button>
+            Sensitivity: 
+            <br><input style="width: 50px;" ng-model="maxDifference">
         </div>
+            
+        </div>
+        
     </div>
 		
 </body>

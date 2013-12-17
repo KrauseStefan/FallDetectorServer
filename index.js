@@ -8,13 +8,21 @@ var dataAccel = {
     "Z":[]
   };
   
-  
+var dataAccelKalman = {
+    "X":[0],
+    "Y":[0],
+    "Z":[0]
+};
+
+P = 1;
+K = 0;
+
  var dataGyro = {
     "X":[],
     "Y":[],
     "Z":[]
   };
-var i = 0;
+var packageNumber = 0;
 
 var slice = Array.prototype.slice;
 
@@ -69,7 +77,8 @@ function getSavedData(path, req, res, next){
  
  var dataObj = {};
  for(var i = 0; i < files.length; i++){
-	 dataObj[files[i]] = fs.readFileSync(path + "/" + files[i], 'utf8');	 
+     var name = files[i].split('.')[0];
+	 dataObj[name] = fs.readFileSync(path + "/" + files[i], 'utf8');	 
  }
  
  
@@ -78,6 +87,9 @@ function getSavedData(path, req, res, next){
 
 
 function appendData(data, req, res, next) {
+	
+ // appendKalmanData(req.body);
+  
   data.X = data.X.concat(req.body.X);
   data.Y = data.Y.concat(req.body.Y);
   data.Z = data.Z.concat(req.body.Z);
@@ -90,11 +102,42 @@ function appendData(data, req, res, next) {
   }
   
   res.send(['ok']);
-  console.log('Data appended: ' + i);
-  i++;
+  console.log('Data appended: ' + packageNumber);
+  packageNumber++;
   return next();
 };
 
+
+function appendKalmanData(dataAccelKalman, req, res, next){
+
+	var dataInput = req.body;
+		
+	for(var lbl in dataAccelKalman){
+		var data = dataAccelKalman[lbl];
+		var d = NaN;
+		for(var i = 0; i < dataInput[lbl].length; i++){
+			K = P / (P + 1);
+			d = data[data.length-1] + K * (dataInput[lbl][i] - data[data.length-1]) * 500;
+			P = (1-K) * P;
+			
+			if(!Number.isNaN(d))
+				data.push(d);
+		}		
+	}
+	
+  var data = dataAccelKalman;
+  var BUFFER_SIZE = 200;
+  if(data.X.length > BUFFER_SIZE){
+    data.X = data.X.slice(data.X.length- BUFFER_SIZE, data.X.length);
+    data.Y = data.Y.slice(data.Y.length- BUFFER_SIZE, data.Y.length);
+    data.Z = data.Z.slice(data.Z.length- BUFFER_SIZE, data.Z.length);
+  }
+  
+  res.send(['ok']);
+  console.log('Data appended: ' + packageNumber);
+  packageNumber++;
+  return next();
+}
 
 function getData(data, req, res, next) {
   res.send(data);  
@@ -108,9 +151,9 @@ var server = restify.createServer();
 server.use(restify.queryParser( {mapParams: false} ));
 server.use(restify.bodyParser());
 
-server.get('/accel', getData.curry(dataAccel));
+server.get('/accel', getData.curry(dataAccelKalman));
 server.head('/accel', getData.curry(dataAccel));
-server.post('/accel', appendData.curry(dataAccel));
+server.post('/accel', appendKalmanData.curry(dataAccelKalman));
 
 server.get('/gyro', getData.curry(dataGyro));
 server.head('/gyro', getData.curry(dataGyro));
@@ -141,4 +184,5 @@ server.get(/.js/, function(req, res, next){
 
 server.listen(80, function() {
   console.log('%s listening at %s', server.name, server.url);
-});
+});
+
