@@ -29,8 +29,19 @@
                 z: []
             };
             
+            $scope.$watch("yMax", function(value){
+                $scope.options.yaxis.min = -value;
+                $scope.options.yaxis.max = value;
+                window.localStorage.yMax = value;
+            })
+            
+            $scope.$watch("options.threshold", function(value){
+                window.localStorage.threshold = value;
+            });
+            
+            $scope.yMax = window.localStorage.yMax  || 40;
             $scope.options = {
-                threshold : 25,
+                threshold : window.localStorage.threshold || 25,
                 pause: false,
                 pausing : false,
                 yaxis: {
@@ -39,8 +50,8 @@
 //                    color: null or color spec
 //                    tickColor: null or color spec
                 
-                    min: -40,
-                    max: 40
+//                    min: -40,
+//                    max: 40
                 
                 
 //                    ticks: null or number or ticks array or (fn: axis -> ticks array)
@@ -99,7 +110,7 @@
                     if(axis == undefined)
                         return series;
                     for(var i = 0; i < axis.length; i++){
-                        series.push([i, axis[i] * 5]);                    
+                        series.push([i, axis[i] * 1]);                    
                     }                    
                     return series                    
                 }
@@ -172,7 +183,13 @@
             var lastX = NaN;
             var lastY = NaN;
             var lastZ = NaN;
-            $scope.maxDifference = 4;
+            //$scope.maxDifference = 4;
+            $scope.$watch("maxDifference", function(value){
+                if(value != undefined)
+                    window.localStorage.maxDifference = value;
+            });
+
+            $scope.maxDifference = window.localStorage.maxDifference || 4;
 
             $interval(function(){
                 function getLastVal(data){
@@ -234,6 +251,8 @@
             </div>
         </div>
         <div style="position: fixed; top: 5px; right: 5px;">
+            <p>Y-Max</p>
+            <input ng-model="yMax">
             <p>Threshold</p>
             <input ng-model="options.threshold" style="width: 80px;"/><br>
             <button ng-show="options.pause == false" ng-click="options.pause = true" style="width: 60px;">Pause</button>
