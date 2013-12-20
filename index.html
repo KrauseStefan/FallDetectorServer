@@ -5,18 +5,13 @@
 	
 	<script src="./js/angular_1.2.3.js"></script>
     <script src="./js/angular-resource.js"></script>
+<!--    <script src="./js/FallDetector-Module.js"></script>-->
 	<script>
         "use strict";
         angular.module('FallDetector', [ 'angular-websocket', 'ngResource'], function(){
     
-        }).controller('controller', function ($q, $scope, $http, $resource, WebSocket, $interval) {
+        }).controller('controller', function ($q, $scope, $http, $resource, WebSocket, $interval, dialog) {
             
-            var testData = {
-                x: [1, 3, 3, 2, 3 ],
-                y: [],
-                z: []
-                };
-                
             $scope.data1 = {
                 x: [],
                 y: [],
@@ -28,6 +23,8 @@
                 y: [],
                 z: []
             };
+            
+            $scope.thresholdReached = false;
             
             $scope.$watch("yMax", function(value){
                 $scope.options.yaxis.min = -value;
@@ -42,27 +39,15 @@
             $scope.yMax = window.localStorage.yMax  || 40;
             $scope.options = {
                 threshold : window.localStorage.threshold || 25,
-                pause: false,
+                pause: { 
+                    normal: false, 
+                    mean: false
+                },
                 pausing : false,
                 yaxis: {
-                    show: true,
-                
-//                    color: null or color spec
-//                    tickColor: null or color spec
-                
-//                    min: -40,
-//                    max: 40
-                
-                
-//                    ticks: null or number or ticks array or (fn: axis -> ticks array)
-//                    tickSize: number or array
-//                    minTickSize: number or array
-//                
-//                    alignTicksWithAxis: null or number
+                    show: true,                
                 } 
              };
-            
-            $scope.dataStr = JSON.stringify(testData);
             
             $scope.$watch('dataStr', function(newData, oldData){
                 try{
@@ -76,11 +61,12 @@
             });
             
             $scope.saveData = function (){
-                var params = {method: 'POST', url: '/accel/saved', data: $scope.data}
+                
+                var params = {method: 'POST', url: '/accel/saved', data: [$scope.data1, $scope.data2]}
                 $http(params).then(
-                function(data){
+                function(response){
                     getSavedData();
-                }, function(data){                    
+                }, function(response){                    
 
                 });
             }
@@ -101,89 +87,110 @@
                 
             }
             getSavedData();
+                        
+            function parseSingleAxis(axis){
+                var series = [];
+                if(axis == undefined)
+                    return series;
+                for(var i = 0; i < axis.length; i++){
+                    series.push([i, axis[i] * 1]);                    
+                }                    
+                return series                    
+            }
             
-            
-            function parseData(data1, data2){
-                
-                function parseSingleAxis(axis){
-                    var series = [];
-                    if(axis == undefined)
-                        return series;
-                    for(var i = 0; i < axis.length; i++){
-                        series.push([i, axis[i] * 1]);                    
-                    }                    
-                    return series                    
-                }
-                
+            function parseDataAccel(data){
                 var lineBelow = {label: "Threshold", color: 'black', data : [[0, -$scope.options.threshold], [200, -$scope.options.threshold]]}
                 var lineTop = {color: 'black', data : [[0, $scope.options.threshold], [200, $scope.options.threshold]]}
                 
-                return [ lineBelow, lineTop,
-                    {label: "Acceleraometer: X", data: parseSingleAxis( data1.X)}, 
-                    {label: "Acceleraometer: Y", data: parseSingleAxis( data1.Y)},
-                    {label: "Acceleraometer: Z", data: parseSingleAxis( data1.Z)},
-                    {label: "Gyro: X", data: parseSingleAxis( data2.X)}, 
-                    {label: "Gyro: Y", data: parseSingleAxis( data2.Y)},
-                    {label: "Gyro: Z", data: parseSingleAxis( data2.Z)} 
-                    
-                    ];
+                return [ 
+                    lineBelow, 
+                    lineTop,
+                    {label: "Accel: X", data: parseSingleAxis( data.X)}, 
+                    {label: "Accel: Y", data: parseSingleAxis( data.Y)},
+                    {label: "Accel: Z", data: parseSingleAxis( data.Z)}
+                ];
+            }
+            function parseDataAccelMean(data){
+                var line = {label: "Avg. Diff.",color: 'black', data : [[175, $scope.currentDiff], [200, $scope.currentDiff]]}
+                
+                return [
+                    line,
+                    {label: "Accel Mean: X", data: parseSingleAxis( data.X)}, 
+                    {label: "Accel Mean: Y", data: parseSingleAxis( data.Y)},
+                    {label: "Accel Mean: Z", data: parseSingleAxis( data.Z)}
+                ];
+                
             }
             
-            
-            
+            var centerProcent = 100/5;
             function verifyThresshold(d){
-                for(var j = 2; j < d.length; j++){
-                    for(var i = 0; i < d[j].data.length; i++){
-                        if(d[j].data[i][1] > $scope.options.threshold || d[j].data[i][1] < -$scope.options.threshold)
-                            $scope.options.pausing = true;
+                
+                var samples = d[0].data.length;
+                var start = samples / 2 - samples / centerProcent;
+                var stop  = samples / 2 + samples / centerProcent;
+                
+                for(var j = 0; j < d.length; j++){
+                    var data = d[j].data;
+                    for(var i = start; i < stop; i++){
+                        if(data[i][1] > $scope.options.threshold || data[i][1] < -$scope.options.threshold)
+                            $scope.thresholdReached = true;
                     }
                 }
             }
             
             function getAccel(){
-                $q.all([$http({method: 'GET', url: '/accel', data: $scope.data}),
-                $http({method: 'GET', url: '/gyro', data: $scope.data})]).
-//                $http({method: 'GET', url: '/gyro', data: $scope.data}).
-                then(function(data) {
-                    var dataParsed = parseData(data[0].data, data[1].data);
-                        $scope.data1 = dataParsed.slice(0,5);
-                        $scope.data2 = dataParsed.slice(5,9);                        
-                        verifyThresshold($scope.data1);
+                $http({method: 'GET', url: '/accel'}).
+                then(function(response) {
+                    var dataParsed = parseDataAccel(response.data);
+                        $scope.data1 = dataParsed;
+                        verifyThresshold(dataParsed.slice(2,5));
+                    },function(data, status, headers, config) {
+
+                    });
+            };
+            function getAccelMean(){
+                $http({method: 'GET', url: '/accelMean'}).
+                then(function(response) {
+                    var dataParsed = parseDataAccelMean(response.data);
+                        $scope.data2 = dataParsed;                        
                     },function(data, status, headers, config) {
 
                     });
             };
             
-            var intervalPromise;
-            $scope.$watch('options.pause', function(value){
+            var intervalAccelPromise;
+            $scope.$watch('options.pause.normal', function(value){
 
                 if(value)
-                  $interval.cancel(intervalPromise);                    
+                  $interval.cancel(intervalAccelPromise);                    
                 else
-                  intervalPromise = $interval(getAccel, 200);
+                  intervalAccelPromise = $interval(getAccel, 200);
 
             });
-            
-            $scope.$watch('options.pausing', function(value){
-               if(value) 
-                    $interval(function(){
-                        $scope.options.pause = true;
-                        $scope.options.pausing = false;
-                    }, 5000, 1);
-                
+
+            var intervalMeanPromise;
+            $scope.$watch('options.pause.mean', function(value){
+
+                if(value)
+                  $interval.cancel(intervalMeanPromise);                    
+                else
+                  intervalMeanPromise = $interval(getAccelMean, 200);
+
             });
 
             $scope.$watch('selectedData', function(data){
                 if(data && data.length > 0){
-                   $scope.options.pause = true;
-                   $scope.data = data;                    
+                   $scope.options.pause.normal = true;
+                   $scope.options.pause.mean = true;
+                   $scope.data1 = data[0];                    
+                   $scope.data2 = data[1];                    
                 }
             })
             
             var lastX = NaN;
             var lastY = NaN;
             var lastZ = NaN;
-            //$scope.maxDifference = 4;
+
             $scope.$watch("maxDifference", function(value){
                 if(value != undefined)
                     window.localStorage.maxDifference = value;
@@ -191,7 +198,11 @@
 
             $scope.maxDifference = window.localStorage.maxDifference || 4;
 
+            $scope.currentDiff = 0;
+
             $interval(function(){
+                if($scope.options.pause.mean)
+                    return;
                 function getLastVal(data){
                     var index = data.data.length;
                     return data.data[index -1][1];
@@ -203,14 +214,15 @@
                 
                 var X = getLastVal($scope.data1[2]);
                 var Y = getLastVal($scope.data1[3]);
-                var Z = getLastVal($scope.data1[4]);
-                
+                var Z = getLastVal($scope.data1[4]);                
                 
                 if(!Number.isNaN(lastX)){
-                    var xDiff = getDifference(X, lastX);
-                    var yDiff = getDifference(Y, lastY);
-                    var zDiff = getDifference(Z, lastZ);
-                    if(xDiff > $scope.maxDifference || yDiff > $scope.maxDifference || zDiff > $scope.maxDifference)
+                    $scope.currentDiff  = getDifference(X, lastX);
+                    $scope.currentDiff += getDifference(Y, lastY);
+                    $scope.currentDiff += getDifference(Z, lastZ);
+                    $scope.currentDiff /= 3;
+                    
+                    if($scope.currentDiff > $scope.maxDifference)
                         $scope.orientationHasChanged = true;
                 }
 
@@ -218,12 +230,32 @@
                 lastY = Y;
                 lastZ = Z;
                 
-            }, 5000);
+            }, 1000);
+            
+            var detectSampleBuffer = [];
+            
+            var detectIntervalPromise = $interval(detectIntervalFn, 3000);
+
+            function detectIntervalFn(){
+                 
+                 if($scope.orientationHasChanged && $scope.thresholdReached){
+                     $interval.cancel(detectIntervalPromise);
+                     dialog.showMsg("Fall detected!!").then(function(){
+                        detectIntervalPromise = $interval(detectIntervalFn, 3000);
+                    });
+                }
+                
+                $scope.orientationHasChanged = false;
+                $scope.thresholdReached = false;
+            };
+            
+            
             
     });
 	</script>
 	
-	<script src="./js/FallDetector-Module.js"></script>
+    <script src="./js/dialogService.js"></script>
+    <script src="./js/dialogDirective.js"></script>
 	<script src="./js/flot_graf_directive.js"></script>
 	<script src="./js/angular-websocket.js"></script>
 	
@@ -240,30 +272,45 @@
         select {
             min-width: 100px;
         }
+        
+        .AF_modal {
+            border: thin solid black;
+            z-index: 102;
+            background: white;
+        }
+        
+        .AF_modalFrame {
+            background: black;
+            opacity: 0.3;
+            z-index: 101;
+            height: 100%;
+            width: 100%;
+        }
+        
     </style>
 </head>
 <body ng-controller="controller">
     <div>
-        <div style="height: 950px; width=460px;"> 
+        <div style="width:460px;"> 
             <div flot-graf data="data1" options="options" style="height: 450px; width: 750px; float: left;">
             </div> 
     	    <div flot-graf data="data2" options="options" style="height: 450px; width: 750px; float: left;">
             </div>
         </div>
-        <div style="position: fixed; top: 5px; right: 5px;">
+        <div style="position: fixed; top: 5px; left: 780px;">
             <p>Y-Max</p>
             <input ng-model="yMax">
-            <p>Threshold</p>
-            <input ng-model="options.threshold" style="width: 80px;"/><br>
-            <button ng-show="options.pause == false" ng-click="options.pause = true" style="width: 60px;">Pause</button>
-            <button ng-show="options.pause == true" ng-click="options.pause = false" style="width: 60px;">Start</button>
+            <button ng-show="options.pause.normal == false" ng-click="options.pause.normal = true; options.pause.mean = true;" style="width: 60px;">Pause</button>
+            <button ng-show="options.pause.normal == true" ng-click="options.pause.normal = false; options.pause.mean = false;" style="width: 60px;">Start</button>
             <button ng-click="saveData()">Save</button>
             <p>SavedData</p>
             <select ng-options="key for (key , value) in savedData" ng-model="selectedData">
             </select>
-            <p>Rename to</p>
-            <input ng-model="selectedData.name">
+<!--            <p>Rename to</p>
+            <input ng-model="selectedData.name">-->
         <div>
+            <p>Threshold</p>
+            <input ng-model="options.threshold" style="width: 80px;"/><br>
             <p>Orientation:</p>
             {{orientationHasChanged ? 'Orientation Changed' : 'Stabile'}}<br>
             <button ng-click="orientationHasChanged = false" ng-show="orientationHasChanged">Accept</button>

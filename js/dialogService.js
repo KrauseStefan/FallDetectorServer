@@ -15,7 +15,7 @@
 
  *********************************/
 
-angular.module('ArlaModule').provider('afDialog', function () {
+angular.module('FallDetector').provider('dialog', function () {
 
 
     //Variables for translation

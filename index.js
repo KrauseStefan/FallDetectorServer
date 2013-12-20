@@ -8,16 +8,16 @@ var dataAccel = {
     "Z":[]
   };
   
-var dataAccelKalman = {
+var dataAccelMeanBuffers = {
+	
+}
+var dataAccelMean = {
     "X":[0],
     "Y":[0],
     "Z":[0]
 };
 
-P = 1;
-K = 0;
-
- var dataGyro = {
+var dataGyro = {
     "X":[],
     "Y":[],
     "Z":[]
@@ -88,7 +88,8 @@ function getSavedData(path, req, res, next){
 
 function appendData(data, req, res, next) {
 	
- // appendKalmanData(req.body);
+  if(data == dataAccel)
+	  appendMeanData(dataAccelMean, req, res, next)	;
   
   data.X = data.X.concat(req.body.X);
   data.Y = data.Y.concat(req.body.Y);
@@ -107,42 +108,59 @@ function appendData(data, req, res, next) {
   return next();
 };
 
+function appendMeanData(dataAccelMean, req, res, next){
 
-function appendKalmanData(dataAccelKalman, req, res, next){
-
+	var BUFFER_SIZE_MEAN = 100;
 	var dataInput = req.body;
 		
-	for(var lbl in dataAccelKalman){
-		var data = dataAccelKalman[lbl];
-		var d = NaN;
+	for(var lbl in dataAccelMean){
+		var data = dataAccelMean[lbl];
+		if(typeof dataAccelMeanBuffers[lbl] == 'undefined'){
+			dataAccelMeanBuffers[lbl] = {};
+			dataAccelMeanBuffers[lbl].buffer = [];
+			for(var i = 0; i < BUFFER_SIZE_MEAN; i++)
+				dataAccelMeanBuffers[lbl].buffer.push(dataInput[lbl][0]);
+
+			dataAccelMeanBuffers[lbl].iBuffer = 0;
+		}
+
+		var buffer = dataAccelMeanBuffers[lbl].buffer;
+		
+		
 		for(var i = 0; i < dataInput[lbl].length; i++){
-			K = P / (P + 1);
-			d = data[data.length-1] + K * (dataInput[lbl][i] - data[data.length-1]) * 500;
-			P = (1-K) * P;
+			var y = 0;		
+			var newY = dataInput[lbl][i];
+
+			buffer[dataAccelMeanBuffers[lbl].iBuffer] = newY
 			
-			if(!Number.isNaN(d))
-				data.push(d);
+			for(var j = 0; j < BUFFER_SIZE_MEAN; j++){
+				y += buffer[j];
+			}
+			
+			y = y / BUFFER_SIZE_MEAN;
+			
+			if(!Number.isNaN(y))
+				data.push(y);
+				
+			dataAccelMeanBuffers[lbl].iBuffer++;
+			
+			if(dataAccelMeanBuffers[lbl].iBuffer >= BUFFER_SIZE_MEAN){
+				dataAccelMeanBuffers[lbl].iBuffer = 0;
+			}
 		}		
 	}
 	
-  var data = dataAccelKalman;
+  var data = dataAccelMean;
   var BUFFER_SIZE = 200;
   if(data.X.length > BUFFER_SIZE){
     data.X = data.X.slice(data.X.length- BUFFER_SIZE, data.X.length);
     data.Y = data.Y.slice(data.Y.length- BUFFER_SIZE, data.Y.length);
     data.Z = data.Z.slice(data.Z.length- BUFFER_SIZE, data.Z.length);
   }
-  
-  res.send(['ok']);
-  console.log('Data appended: ' + packageNumber);
-  packageNumber++;
-  return next();
 }
 
 function getData(data, req, res, next) {
   res.send(data);  
-	if(i == -1)
-		appendData();
   return next();
 };
 
@@ -151,9 +169,10 @@ var server = restify.createServer();
 server.use(restify.queryParser( {mapParams: false} ));
 server.use(restify.bodyParser());
 
-server.get('/accel', getData.curry(dataAccelKalman));
+server.get('/accel', getData.curry(dataAccel));
+server.get('/accelMean', getData.curry(dataAccelMean));
 server.head('/accel', getData.curry(dataAccel));
-server.post('/accel', appendKalmanData.curry(dataAccelKalman));
+server.post('/accel', appendData.curry(dataAccel));
 
 server.get('/gyro', getData.curry(dataGyro));
 server.head('/gyro', getData.curry(dataGyro));
