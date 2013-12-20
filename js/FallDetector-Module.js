@@ -9,9 +9,7 @@
  *********************************/
 "use strict";
 
-//angular.module('FallDetector', ['ng'], function(){
-
-//}).controller('mainController', function ($scope) {
+angular.module('FallDetector', ['ng'])//.controller('mainController', function ($scope) {
 
 
 //    });

@@ -11,7 +11,7 @@
 
  *********************************/
 'use strict';
-angular.module('ArlaModule').directive('afDialog', function factory($document, $window, $timeout) {
+angular.module('FallDetector').directive('afDialog', function factory($document, $window, $timeout) {
     var body = angular.element($document[0].body);
 
     var handledEscapeKey = null;
