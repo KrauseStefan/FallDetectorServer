@@ -55,7 +55,7 @@ function saveData(path, req, res, next){
 		var dataStr = JSON.stringify(req.body);
 		
 			
-		fs.writeFile(path + "/" + time + ".js", dataStr, function(err){
+		fs.writeFile(path + "/SimFall_" + time + ".js", dataStr, function(err){
 		  console.log(written + " bytes of data written.");
 		});
 
